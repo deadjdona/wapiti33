@@ -33,7 +33,7 @@ six = ">=1.15.0"
 sslyze = "==5.1.1"
 sqlalchemy = ">=1.4.26"
 tld = ">=0.12.5"
-typing-extensions = "==4.4.0"
+typing-extensions = "==4.8.0"
 yaswfp = ">=0.9.3"
 
 [requires]
