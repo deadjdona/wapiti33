@@ -329,7 +329,7 @@ def parse_args():
         "--max-attack-time",
         metavar="SECONDS",
         help="Set how many seconds you want each attack module to last (floats accepted)",
-        type=float, default=0
+        type=float, default=None
     )
 
     parser.add_argument(
@@ -485,7 +485,7 @@ def parse_args():
 
     parser.add_argument(
         "--cms",
-        help="Choose the CMS to scan. Possible choices : drupal, joomla, prestashop",
+        help="Choose the CMS to scan. Possible choices : drupal, joomla, prestashop, spip",
         metavar="CMS_LIST"
     )
 

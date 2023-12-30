@@ -178,7 +178,7 @@ class Wapiti:
         self._max_files_per_dir = 0
         self._scan_force = "normal"
         self._max_scan_time = 0
-        self._max_attack_time = 0
+        self._max_attack_time = None
         self._bug_report = True
         self._logfile = ""
         self._auth_state = None
@@ -424,6 +424,63 @@ class Wapiti:
             async for request, response in self.persister.get_forms(attack_module=module.name):
                 yield request, response
 
+    async def load_and_attack(self, stop_event: asyncio.Event, attack_module: Attack, attacked_ids: set, answer: str):
+        async for original_request, original_response in self.load_resources_for_module(attack_module):
+            if stop_event.is_set():
+                print('')
+                print("Attack process was interrupted. Do you want to:")
+                print("\tr) stop everything here and generate the (R)eport")
+                print("\tn) move to the (N)ext attack module (if any)")
+                print("\tq) (Q)uit without generating the report")
+                print("\tc) (C)ontinue the current attack")
+
+                while True:
+                    try:
+                        answer = input("? ").strip().lower()
+                    except UnicodeDecodeError:
+                        pass
+
+                    if answer not in ("r", "n", "q", "c"):
+                        print("Invalid choice. Valid choices are r, n, q and c.")
+                    else:
+                        break
+
+                if answer in ("n", "c"):
+                    stop_event.clear()
+
+                if answer in ("r", "n", "q"):
+                    break
+
+                if answer == "c":
+                    continue
+
+            try:
+                if await attack_module.must_attack(original_request, original_response):
+                    logging.info(f"[+] {original_request}")
+
+                    await attack_module.attack(original_request, original_response)
+
+            except RequestError:
+                # Hmm, it should be caught inside the module
+                await asyncio.sleep(1)
+                continue
+            except Exception as exception:  # pylint: disable=broad-except
+                # Catch every possible exceptions and print it
+                exception_traceback = sys.exc_info()[2]
+                logging.exception(exception.__class__.__name__, exception)
+
+                if self._bug_report:
+                    await self.send_bug_report(
+                        exception,
+                        exception_traceback,
+                        attack_module.name,
+                        original_request
+                    )
+            else:
+                if original_request.path_id is not None:
+                    attacked_ids.add(original_request.path_id)
+
+
     async def attack(self, stop_event: asyncio.Event):
         """Launch the attacks based on the preferences set by the command line"""
         async with AsyncCrawler.with_configuration(self.crawler_configuration) as crawler:
@@ -434,7 +491,6 @@ class Wapiti:
                 if stop_event.is_set():
                     break
 
-                start = datetime.utcnow()
                 if attack_module.do_get is False and attack_module.do_post is False:
                     continue
 
@@ -467,68 +523,16 @@ class Wapiti:
 
                 answer = "0"
                 attacked_ids = set()
-                async for original_request, original_response in self.load_resources_for_module(attack_module):
-                    if stop_event.is_set():
-                        print('')
-                        print("Attack process was interrupted. Do you want to:")
-                        print("\tr) stop everything here and generate the (R)eport")
-                        print("\tn) move to the (N)ext attack module (if any)")
-                        print("\tq) (Q)uit without generating the report")
-                        print("\tc) (C)ontinue the current attack")
 
-                        while True:
-                            try:
-                                answer = input("? ").strip().lower()
-                            except UnicodeDecodeError:
-                                pass
-
-                            if answer not in ("r", "n", "q", "c"):
-                                print("Invalid choice. Valid choices are r, n, q and c.")
-                            else:
-                                break
-
-                        if answer in ("n", "c"):
-                            stop_event.clear()
-
-                        if answer in ("r", "n", "q"):
-                            break
-
-                        if answer == "c":
-                            continue
-
-                    try:
-                        if await attack_module.must_attack(original_request, original_response):
-                            logging.info(f"[+] {original_request}")
-
-                            await attack_module.attack(original_request, original_response)
-
-                        if (datetime.utcnow() - start).total_seconds() > self._max_attack_time >= 1:
-                            # FIXME: Right now we cannot remove the pylint: disable line because the current I18N system
-                            # uses the string as a token so we cannot use f string
-                            # pylint: disable=consider-using-f-string
-                            logging.info(
-                                f"Max attack time was reached for module {attack_module.name}, stopping."
-                            )
-                            break
-                    except RequestError:
-                        # Hmm, it should be caught inside the module
-                        await asyncio.sleep(1)
-                        continue
-                    except Exception as exception:  # pylint: disable=broad-except
-                        # Catch every possible exceptions and print it
-                        exception_traceback = sys.exc_info()[2]
-                        logging.exception(exception.__class__.__name__, exception)
-
-                        if self._bug_report:
-                            await self.send_bug_report(
-                                exception,
-                                exception_traceback,
-                                attack_module.name,
-                                original_request
-                            )
-                    else:
-                        if original_request.path_id is not None:
-                            attacked_ids.add(original_request.path_id)
+                try:
+                    await asyncio.wait_for(
+                        self.load_and_attack(stop_event, attack_module, attacked_ids, answer),
+                        self._max_attack_time
+                    )
+                except asyncio.TimeoutError:
+                    logging.info(
+                        f"Max attack time was reached for module {attack_module.name}, stopping."
+                    )
 
                 await self.persister.set_attacked(attacked_ids, attack_module.name)
 

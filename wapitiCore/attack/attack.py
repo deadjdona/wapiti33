@@ -128,6 +128,7 @@ class ParameterSituation(Flag):
     POST_BODY = auto()
     MULTIPART = auto()
     HEADERS = auto()
+    JSON_BODY = auto()
 
 
 @dataclasses.dataclass
@@ -289,11 +290,11 @@ class Attack:
 
     @property
     def max_attack_time(self):
-        return self.options.get("max_attack_time", 0)
+        return self.options.get("max_attack_time", None)
 
     @property
     def cms(self):
-        return self.options.get("cms", "drupal,joomla,prestashop")
+        return self.options.get("cms", "drupal,joomla,prestashop,spip")
 
 
     @property
