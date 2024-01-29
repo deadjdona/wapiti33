@@ -71,7 +71,7 @@ test = [
         "humanize==4.9.0",
         "pytest>=7.4.3", 
         "pytest-cov>=4.1.0",
-        "pytest-asyncio==0.23.3",
+        "pytest-asyncio==0.23.4",
         "respx==0.20.2",
         "sslyze==5.2.0"
 ]
