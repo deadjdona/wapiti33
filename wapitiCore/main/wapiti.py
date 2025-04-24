@@ -61,9 +61,10 @@ def is_valid_url(url: str):
     except ValueError:
         logging.error('ValueError')
         return False
-    else:
-        if parts.scheme in ("http", "https") and parts.netloc:
-            return True
+
+    if parts.scheme in ("http", "https") and parts.netloc:
+        return True
+
     logging.error(f"Error: {url} is not a valid URL")
     return False
 
@@ -75,12 +76,13 @@ def is_valid_endpoint(url_type, url: str):
     except ValueError:
         logging.error('ValueError')
         return False
-    else:
-        if parts.params or parts.query or parts.fragment:
-            logging.error(f"Error: {url_type} must not contain params, query or fragment!")
-            return False
-        if parts.scheme in ("http", "https") and parts.netloc:
-            return True
+
+    if parts.params or parts.query or parts.fragment:
+        logging.error(f"Error: {url_type} must not contain params, query or fragment!")
+        return False
+    if parts.scheme in ("http", "https") and parts.netloc:
+        return True
+
     logging.error(f"Error: {url_type} must contain scheme and host")
     return False
 
@@ -88,6 +90,7 @@ def is_valid_endpoint(url_type, url: str):
 def is_mod_cms_set(args):
     if args.modules and "cms" in args.modules:
         return True
+
     logging.error("Error: Invalid option --cms, module cms is required when this option is used")
     return False
 
@@ -116,6 +119,7 @@ def ping(url: str):
     return True
 
 
+# pylint: disable=too-many-locals,too-many-branches,too-many-statements
 async def wapiti_main():
     print_banner()
     args = parse_args()
@@ -192,13 +196,17 @@ async def wapiti_main():
             raise
 
     if args.swagger_uri:
-        swagger = Swagger(swagger_url=args.swagger_uri, base_url=url)
+        swagger = Swagger(swagger_url=args.swagger_uri, base_url=url, crawler_configuration=wap.crawler_configuration)
         nb_out = 0
-        for request in swagger.get_requests():
-            if wap.target_scope.check(request):
-                wap.add_start_url(request)
-            else:
-                nb_out += 1
+        try:
+            for request in await swagger.get_requests():
+                if wap.target_scope.check(request):
+                    wap.add_start_url(request)
+                else:
+                    nb_out += 1
+        except (ValueError, FileNotFoundError, RuntimeError) as exception:
+            raise InvalidOptionValue("--swagger", f"Could not parse swagger file: {exception}") from exception
+
         if nb_out > 0:
             logging.warning(f"[!] {nb_out} out of scope requests from the Swagger file are not added.")
 
@@ -208,8 +216,8 @@ async def wapiti_main():
                 wap.add_start_url(Request(start_url))
             elif os.path.isfile(start_url):
                 try:
-                    with codecs.open(start_url, encoding="UTF-8") as urlfd:
-                        for urlline in urlfd:
+                    with codecs.open(start_url, encoding="UTF-8") as url_fd:
+                        for urlline in url_fd:
                             urlline = urlline.strip()
                             if urlline.startswith(("http://", "https://")):
                                 wap.add_start_url(Request(urlline))

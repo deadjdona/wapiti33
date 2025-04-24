@@ -22,12 +22,14 @@
 from urllib.parse import urlparse, urlunparse
 import warnings
 import functools
-from typing import Dict
+from typing import Optional
 import asyncio
 import ssl
 
 # Third-parties
 import httpx
+# https://github.com/ulodciv/httpx-ntlm
+from httpx_ntlm import HttpNtlmAuth
 
 # Internal libraries
 from wapitiCore.net import web
@@ -145,8 +147,6 @@ class AsyncCrawler:
                     configuration.http_credential.password
                 )
             elif configuration.http_credential.method == "ntlm":
-                # https://github.com/ulodciv/httpx-ntlm
-                from httpx_ntlm import HttpNtlmAuth
                 auth = HttpNtlmAuth(
                     configuration.http_credential.username,  # username should be in the form "domain\user"
                     configuration.http_credential.password
@@ -157,7 +157,7 @@ class AsyncCrawler:
             headers=headers,
             cookies=configuration.cookies,
             verify=ssl_context,
-            proxies=cls._proxy_url_to_dict(configuration.proxy),
+            proxy=cls._fix_proxy_url(configuration.proxy),
             timeout=configuration.timeout,
             event_hooks={"request": [drop_cookies_from_request]} if configuration.drop_cookies else None,
         )
@@ -166,10 +166,10 @@ class AsyncCrawler:
         return cls(configuration.base_request, client, configuration.timeout)
 
     @staticmethod
-    def _proxy_url_to_dict(proxy: str) -> Dict[str, str]:
+    def _fix_proxy_url(proxy: str) -> Optional[str]:
         """Set a proxy to use for HTTP requests."""
         if not proxy:
-            return {}
+            return None
 
         url_parts = urlparse(proxy)
         protocol = url_parts.scheme.lower()
@@ -180,10 +180,7 @@ class AsyncCrawler:
         if protocol == "socks":
             protocol = "socks5"
 
-        return {
-            "http://": urlunparse((protocol, url_parts.netloc, '/', '', '', '')),
-            "https://": urlunparse((protocol, url_parts.netloc, '/', '', '', '')),
-        }
+        return urlunparse((protocol, url_parts.netloc, '/', '', '', ''))
 
     @property
     def timeout(self):

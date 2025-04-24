@@ -5,7 +5,7 @@ from time import sleep
 import http.server
 import ssl
 from unittest.mock import AsyncMock
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 import httpx
 import pytest
@@ -28,13 +28,17 @@ from wapitiCore.attack.mod_ssl import (
 def https_server(cert_directory: str):
     server_address = ("127.0.0.1", 4443)
     httpd = http.server.HTTPServer(server_address, http.server.SimpleHTTPRequestHandler)
-    httpd.socket = ssl.wrap_socket(
-        httpd.socket,
-        server_side=True,
+
+    # Create an SSL context
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(
         certfile=os.path.join(cert_directory, "cert.pem"),
-        keyfile=os.path.join(cert_directory, "key.pem"),
-        ssl_version=ssl.PROTOCOL_TLS
+        keyfile=os.path.join(cert_directory, "key.pem")
     )
+
+    # Wrap the socket with the context
+    httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
+
     httpd.serve_forever()
 
 
@@ -157,9 +161,9 @@ def generate_cert(include_organization_name: bool = True, include_ocsp_must_stap
     ).serial_number(
         x509.random_serial_number()
     ).not_valid_before(
-        datetime.utcnow()
+        datetime.now(UTC)
     ).not_valid_after(
-        datetime.utcnow() + timedelta(days=10)
+        datetime.now(UTC) + timedelta(days=10)
     ).add_extension(
         x509.SubjectAlternativeName([x509.DNSName(u"localhost")]),
         critical=False,
@@ -212,6 +216,7 @@ async def test_process_vulnerabilities():
     results = [info async for info in process_vulnerabilities(xml_file)]
     assert [
         (4, 'Server is vulnerable to Heartbleed attack via TLSv1.0'),
+        (4, 'Server is vulnerable to CRIME attack (compression is supported)'),
         (3, 'Server honors client-initiated renegotiations (vulnerable to DoS attacks)')
     ] == results
 
