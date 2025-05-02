@@ -31,6 +31,7 @@ def https_server(cert_directory: str):
 
     # Create an SSL context
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(
         certfile=os.path.join(cert_directory, "cert.pem"),
         keyfile=os.path.join(cert_directory, "key.pem")
