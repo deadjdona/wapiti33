@@ -36,7 +36,7 @@ dependencies = [
         "aiosqlite==0.20.0",
         "wapiti-arsenic==28.2",
         "beautifulsoup4==4.12.3",
-        "browser-cookie3==0.19.1",
+        "browser-cookie3==0.20.1",
         "dnspython==2.6.1",
         "h11>=0.16.0,<0.17",
         "httpcore==1.0.9",
