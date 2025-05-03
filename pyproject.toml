@@ -31,7 +31,7 @@ classifiers = [
         "Topic :: Software Development :: Testing"
 ]
 dependencies = [
-        "aiocache==0.12.2",
+        "aiocache==0.12.3",
         "aiohttp==3.11.18",
         "aiosqlite==0.20.0",
         "wapiti-arsenic==28.2",
