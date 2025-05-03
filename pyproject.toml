@@ -71,7 +71,7 @@ test = [
         "humanize==4.9.0",
         "pytest==8.3.5",
         "pytest-cov==4.1.0",
-        "pytest-asyncio==0.23.5",
+        "pytest-asyncio==0.26.0",
         "respx==0.22.0",
 ]
 dev = [
@@ -80,7 +80,7 @@ dev = [
         "pylint==3.3.6",
         "pytest==8.3.5",
         "pytest-cov==4.1.0",
-        "pytest-asyncio==0.23.5",
+        "pytest-asyncio==0.26.0",
         "respx==0.22.0",
         "wheel",
 ]
