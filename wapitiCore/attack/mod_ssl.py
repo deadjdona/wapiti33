@@ -75,6 +75,7 @@ def check_ev_certificate(cert: x509.Certificate) -> bool:
 
 def get_certificate(hostname: str, port: int = 443) -> x509.Certificate:
     context = ssl.create_default_context()
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE
     conn = context.wrap_socket(
