@@ -48,7 +48,7 @@ dependencies = [
         "markupsafe==2.1.5",
         "mitmproxy==12.0.0",
         "msgpack==1.0.0",  # required by mitmproxy, lower version may require g++
-        "packaging==24.1",
+        "packaging==25.0",
         "pyasn1==0.6.1",
         "sqlalchemy==2.0.40",
         "tld==0.13",
@@ -77,7 +77,7 @@ test = [
 dev = [
         "build",
         "humanize==4.9.0",
-        "pylint==3.3.6",
+        "pylint==3.3.7",
         "pytest==8.3.5",
         "pytest-cov==6.1.1",
         "pytest-asyncio==0.26.0",
