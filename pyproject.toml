@@ -51,7 +51,7 @@ dependencies = [
         "packaging==25.0",
         "pyasn1==0.6.1",
         "sqlalchemy==2.0.41",
-        "tld==0.13",
+        "tld==0.13.1",
         "typing-extensions>=4.12.0",  # prevent annotation assertion errors within sqlalchemy
         "urwid==3.0.2",  # required by mitmproxy, lower versions conflict with typing-extensions
         "yaswfp==0.9.3",
