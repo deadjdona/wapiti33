@@ -32,7 +32,7 @@ classifiers = [
 ]
 dependencies = [
         "aiocache==0.12.3",
-        "aiohttp==3.11.18",
+        "aiohttp==3.12.6",
         "aiosqlite==0.21.0",
         "wapiti-arsenic==28.2",
         "beautifulsoup4==4.13.4",
