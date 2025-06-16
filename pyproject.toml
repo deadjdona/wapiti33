@@ -37,7 +37,7 @@ dependencies = [
         "wapiti-arsenic==28.2",
         "beautifulsoup4==4.13.4",
         "browser-cookie3==0.20.1",
-        "dnspython==2.6.1",
+        "dnspython==2.7.0",
         "h11>=0.16.0,<0.17",
         "httpcore==1.0.9",
         "httpx[brotli, socks]==0.28.1",
