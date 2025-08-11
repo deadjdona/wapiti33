@@ -50,7 +50,7 @@ dependencies = [
         "msgpack==1.1.1",  # required by mitmproxy, lower version may require g++
         "packaging==25.0",
         "pyasn1==0.6.1",
-        "sqlalchemy==2.0.41",
+        "sqlalchemy==2.0.42",
         "tld==0.13.1",
         "typing-extensions>=4.12.0",  # prevent annotation assertion errors within sqlalchemy
         "urwid==3.0.2",  # required by mitmproxy, lower versions conflict with typing-extensions
