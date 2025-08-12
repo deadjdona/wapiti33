@@ -22,6 +22,7 @@ import codecs
 import os
 import signal
 import sys
+from argparse import Namespace
 from importlib import import_module
 from inspect import getdoc
 from sqlite3 import OperationalError
@@ -35,6 +36,7 @@ from wapitiCore.attack.attack import (all_modules, common_modules)
 from wapitiCore.controller.exceptions import InvalidOptionValue
 from wapitiCore.controller.wapiti import Wapiti
 from wapitiCore.main.banners import print_banner
+from wapitiCore.net.web import is_valid_url
 from wapitiCore.parsers.commandline import parse_args
 from wapitiCore.main.log import logging
 from wapitiCore.net.classes import HttpCredential, FormCredential, RawCredential
@@ -55,21 +57,6 @@ def inner_ctrl_c_signal_handler(_, __):
 def fix_url_path(url: str):
     """Fix the url path if it's not defined"""
     return url if urlparse(url).path else url + '/'
-
-
-def is_valid_url(url: str):
-    """Verify if the url provided has the right format"""
-    try:
-        parts = urlparse(url)
-    except ValueError:
-        logging.error('ValueError')
-        return False
-
-    if parts.scheme in ("http", "https") and parts.netloc:
-        return True
-
-    logging.error(f"Error: {url} is not a valid URL")
-    return False
 
 
 def is_valid_endpoint(url_type, url: str):
@@ -122,15 +109,8 @@ def ping(url: str):
     return True
 
 
-# pylint: disable=too-many-locals,too-many-branches,too-many-statements
-async def wapiti_main():
-    print_banner()
-    args = parse_args()
-
-    if args.tasks < 1:
-        logging.error("Number of concurrent tasks must be 1 or above!")
-        sys.exit(2)
-
+def handle_special_commands(args: Namespace):
+    """Handle special commands before main processing."""
     if args.scope == "punk":
         print("[*] Do you feel lucky punk?")
 
@@ -148,23 +128,32 @@ async def wapiti_main():
                 continue
         sys.exit()
 
-    url = fix_url_path(args.base_url)
-    if args.data:
-        base_request = Request(
-            url,
-            method="POST",
-            post_params=args.data
-        )
-    else:
-        base_request = Request(url)
 
+def validate_basic_args(args: Namespace):
+    """Validate base arguments and exit in case of problem."""
+    if args.tasks < 1:
+        logging.error("Number of concurrent tasks must be 1 or above!")
+        sys.exit(2)
+
+    url = fix_url_path(args.base_url)
     parts = urlparse(url)
     if not parts.scheme or not parts.netloc:
         logging.error("Invalid base URL was specified, please give a complete URL with protocol scheme.")
         sys.exit()
 
-    wap = Wapiti(base_request, scope=args.scope, session_dir=args.store_session, config_dir=args.store_config)
+    return url
 
+
+def create_base_request(url, args):
+    """Generate base Request object."""
+    if args.data:
+        return Request(url, method="POST", post_params=args.data)
+
+    return Request(url)
+
+
+def configure_wapiti_basic_settings(wap, args):
+    """Configure Wapiti's base settings."""
     if args.log:
         wap.set_logfile(args.log)
 
@@ -174,19 +163,126 @@ async def wapiti_main():
     if args.tor:
         wap.set_proxy("socks5://127.0.0.1:9050/")
 
+    wap.set_headless(args.headless)
+    wap.set_wait_time(args.wait_time)
+    wap.set_max_depth(args.depth)
+    wap.set_max_files_per_dir(args.max_files_per_dir)
+    wap.set_max_links_per_page(args.max_links_per_page)
+    wap.set_scan_force(args.scan_force)
+    wap.set_max_scan_time(args.max_scan_time)
+    wap.active_scanner.set_max_attack_time(args.max_attack_time)
+    wap.verbosity(args.verbosity)
+    wap.set_timeout(args.timeout)
+
+    if args.detailed_report_level:
+        wap.set_detail_report(args.detailed_report_level)
+    if args.color:
+        wap.set_color()
+    if args.no_bugreport:
+        wap.active_scanner.set_bug_reporting(False)
+    if args.drop_set_cookie:
+        wap.set_drop_cookies()
+    if "output" in args:
+        wap.set_output_file(args.output)
+
+    wap.set_report_generator_type(args.format)
+    wap.set_verify_ssl(bool(args.check_ssl))
+
+
+def build_attack_options_from_args(args: Namespace) -> dict:
+    attack_options = {
+        "level": args.level,
+        "timeout": args.timeout,
+        "tasks": args.tasks,
+        "headless": args.headless,
+        "excluded_urls": args.excluded_urls,
+        "max_attack_time": args.max_attack_time,
+    }
+
+    if "dns_endpoint" in args:
+        attack_options["dns_endpoint"] = args.dns_endpoint
+
+    if "endpoint" in args:
+        endpoint = fix_url_path(args.endpoint)
+        if is_valid_endpoint("ENDPOINT", endpoint):
+            attack_options["external_endpoint"] = endpoint
+            attack_options["internal_endpoint"] = endpoint
+        else:
+            raise InvalidOptionValue("--endpoint", args.endpoint)
+
+    if "external_endpoint" in args:
+        external_endpoint = fix_url_path(args.external_endpoint)
+        if is_valid_endpoint("EXTERNAL ENDPOINT", external_endpoint):
+            attack_options["external_endpoint"] = external_endpoint
+        else:
+            raise InvalidOptionValue("--external-endpoint", external_endpoint)
+
+    if "internal_endpoint" in args:
+        internal_endpoint = fix_url_path(args.internal_endpoint)
+        if is_valid_endpoint("INTERNAL ENDPOINT", internal_endpoint):
+            if ping(internal_endpoint):
+                attack_options["internal_endpoint"] = internal_endpoint
+            else:
+                logging.error("Error: Internal endpoint URL must be accessible from Wapiti!")
+                raise InvalidOptionValue("--internal-endpoint", internal_endpoint)
+        else:
+            raise InvalidOptionValue("--internal-endpoint", internal_endpoint)
+
+    if args.cms:
+        allowed_cms = ["drupal", "joomla", "prestashop", "spip", "wp"]
+        if not is_mod_cms_set(args):
+            raise InvalidOptionValue("--cms", "module cms is required when --cms is used")
+        if not validate_cms_choices(args.cms):
+            raise InvalidOptionValue("--cms", f"Invalid CMS choice: {args.cms}. Choose from {', '.join(allowed_cms)}")
+        attack_options["cms"] = args.cms
+
+    if args.modules and "cms" in args.modules and not args.cms:
+        attack_options["cms"] = "drupal,joomla,prestashop,spip,wp"
+
+    if args.wapp_url:
+        if not is_mod_wapp_or_update_set(args):
+            raise InvalidOptionValue("--wapp-url", "module wapp or --update option is required when --wapp-url is used")
+        url_value = fix_url_path(args.wapp_url)
+        if is_valid_url(url_value):
+            attack_options["wapp_url"] = url_value
+        else:
+            raise InvalidOptionValue("--wapp-url", url_value)
+
+    if args.wapp_dir:
+        if not is_mod_wapp_or_update_set(args):
+            raise InvalidOptionValue("--wapp-dir", "module wapp or --update option is required when --wapp-dir is used")
+        dir_value = args.wapp_dir
+        if os.path.isdir(dir_value):
+            attack_options["wapp_dir"] = dir_value
+        else:
+            raise InvalidOptionValue("--wapp-dir", dir_value)
+
+    if args.update and not args.wapp_url and not args.wapp_dir:
+        attack_options["wapp_url"] = "https://raw.githubusercontent.com/wapiti-scanner/wappalyzerfork/main/"
+
+    if args.skipped_parameters:
+        attack_options["skipped_parameters"] = set(args.skipped_parameters)
+
+    return attack_options
+
+
+# pylint: disable=too-many-locals,too-many-branches,too-many-statements
+async def wapiti_main():
+    print_banner()
+    args = parse_args()
+
+    handle_special_commands(args)
+    url = validate_basic_args(args)
+    base_request = create_base_request(url, args)
+
+    wap = Wapiti(base_request, scope=args.scope, session_dir=args.store_session, config_dir=args.store_config)
+
+    configure_wapiti_basic_settings(wap, args)
+    attack_options = build_attack_options_from_args(args)
+
     if args.update:
         await wap.init_persister()
         logging.log("GREEN", "[*] Updating modules")
-        if args.wapp_url:
-            attack_options = {"level": args.level, "timeout": args.timeout, "wapp_url": fix_url_path(args.wapp_url)}
-        elif args.wapp_dir:
-            attack_options = {"level": args.level, "timeout": args.timeout, "wapp_dir": args.wapp_dir}
-        else:
-            attack_options = {
-                "level": args.level,
-                "timeout": args.timeout,
-                "wapp_url": "https://raw.githubusercontent.com/wapiti-scanner/wappalyzerfork/main/"
-            }
         wap.active_scanner.set_attack_options(attack_options)
         try:
             await wap.active_scanner.update(args.modules)
@@ -239,9 +335,6 @@ async def wapiti_main():
         if "mitm_port" in args:
             wap.set_intercepting_proxy_port(args.mitm_port)
 
-        wap.set_headless(args.headless)
-        wap.set_wait_time(args.wait_time)
-
         if "side_file" in args:
             if os.path.isfile(args.side_file):
                 wap.crawler_configuration.cookies = await authenticate_with_side_file(
@@ -278,24 +371,7 @@ async def wapiti_main():
         for bad_param in args.excluded_parameters:
             wap.add_bad_param(bad_param)
 
-        wap.set_max_depth(args.depth)
-        wap.set_max_files_per_dir(args.max_files_per_dir)
-        wap.set_max_links_per_page(args.max_links_per_page)
-        wap.set_scan_force(args.scan_force)
-        wap.set_max_scan_time(args.max_scan_time)
-        wap.active_scanner.set_max_attack_time(args.max_attack_time)
-
-        # should be a setter
-        wap.verbosity(args.verbosity)
-        if args.detailed_report_level:
-            wap.set_detail_report(args.detailed_report_level)
-        if args.color:
-            wap.set_color()
-        wap.set_timeout(args.timeout)
         wap.active_scanner.set_modules(args.modules)
-
-        if args.no_bugreport:
-            wap.active_scanner.set_bug_reporting(False)
 
         if "user_agent" in args:
             wap.add_custom_header("User-Agent", args.user_agent)
@@ -308,93 +384,8 @@ async def wapiti_main():
                 hdr_name, hdr_value = custom_header.split(":", 1)
                 wap.add_custom_header(hdr_name.strip(), hdr_value.strip())
 
-        if "output" in args:
-            wap.set_output_file(args.output)
-
         if args.format not in GENERATORS:
             raise InvalidOptionValue("-f", args.format)
-
-        wap.set_report_generator_type(args.format)
-
-        wap.set_verify_ssl(bool(args.check_ssl))
-
-        attack_options = {
-            "level": args.level,
-            "timeout": args.timeout,
-            "tasks": args.tasks,
-            "headless": wap.headless_mode,
-            "excluded_urls": wap.excluded_urls,
-            "max_attack_time": args.max_attack_time,
-        }
-
-        if "dns_endpoint" in args:
-            attack_options["dns_endpoint"] = args.dns_endpoint
-
-        if "endpoint" in args:
-            endpoint = fix_url_path(args.endpoint)
-            if is_valid_endpoint('ENDPOINT', endpoint):
-                attack_options["external_endpoint"] = endpoint
-                attack_options["internal_endpoint"] = endpoint
-            else:
-                raise InvalidOptionValue("--endpoint", args.endpoint)
-
-        if "external_endpoint" in args:
-            external_endpoint = fix_url_path(args.external_endpoint)
-            if is_valid_endpoint('EXTERNAL ENDPOINT', external_endpoint):
-                attack_options["external_endpoint"] = external_endpoint
-            else:
-                raise InvalidOptionValue("--external-endpoint", external_endpoint)
-
-        if "internal_endpoint" in args:
-            internal_endpoint = fix_url_path(args.internal_endpoint)
-            if is_valid_endpoint('INTERNAL ENDPOINT', internal_endpoint):
-                if ping(internal_endpoint):
-                    attack_options["internal_endpoint"] = internal_endpoint
-                else:
-                    logging.error("Error: Internal endpoint URL must be accessible from Wapiti!")
-                    raise InvalidOptionValue("--internal-endpoint", internal_endpoint)
-            else:
-                raise InvalidOptionValue("--internal-endpoint", internal_endpoint)
-
-        if args.cms:
-            allowed_cms = ["drupal", "joomla", "prestashop", "spip", "wp"]
-            if not is_mod_cms_set(args):
-                raise InvalidOptionValue("--cms", "module cms is required when --cms is used")
-            if not validate_cms_choices(args.cms):
-                raise InvalidOptionValue(
-                    "--cms", f"Invalid CMS choice: {args.cms}. Choose from {', '.join(allowed_cms)}"
-                )
-            attack_options["cms"] = args.cms
-
-        if args.modules and "cms" in args.modules and not args.cms:
-            attack_options["cms"] = "drupal,joomla,prestashop,spip,wp"
-
-        if args.wapp_url:
-            if not is_mod_wapp_or_update_set(args):
-                raise InvalidOptionValue("--wapp-url", "module wapp or --update option is required when --wapp-url is "
-                                                       "used")
-            url_value = fix_url_path(args.wapp_url)
-            if is_valid_url(url_value):
-                attack_options["wapp_url"] = url_value
-            else:
-                raise InvalidOptionValue(
-                    "--wapp-url", url_value
-                )
-
-        if args.wapp_dir:
-            if not is_mod_wapp_or_update_set(args):
-                raise InvalidOptionValue("--wapp-url", "module wapp or --update option is required when --wapp-url is "
-                                                       "used")
-            dir_value = args.wapp_dir
-            if os.path.isdir(dir_value):
-                attack_options["wapp_dir"] = dir_value
-            else:
-                raise InvalidOptionValue(
-                    "--wapp-dir", dir_value
-                )
-
-        if args.skipped_parameters:
-            attack_options["skipped_parameters"] = set(args.skipped_parameters)
 
         wap.active_scanner.set_attack_options(attack_options)
 

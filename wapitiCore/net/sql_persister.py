@@ -26,13 +26,13 @@ from aiocache import cached
 import httpx
 from sqlalchemy import (Boolean, Column, ForeignKey, Integer, MetaData,
                         PickleType, String, Table, Text, LargeBinary, and_,
-                        literal_column, or_, select)
+                        literal_column, select)
 from sqlalchemy.sql.functions import max as sql_max
 from sqlalchemy.sql.functions import count as sql_count
 from sqlalchemy.ext.asyncio import create_async_engine
 from wapitiCore.net import Request, Response
 
-Payload = namedtuple("Payload", "evil_request,original_request,category,level,parameter,info,type,wstg,module,response")
+Payload = namedtuple("Payload", "evil_request,category,level,parameter,info,type,wstg,module,response")
 
 
 class SqlPersister:
@@ -129,18 +129,17 @@ class SqlPersister:
             Column("position", Integer, nullable=False),
             Column("name", Text, nullable=False),  # Name of the parameter. Encountered some above 1000 characters
             Column("value1", Text),  # Can be really huge
-            Column("value2", Text),  # File content. Will be short most of the time but we plan on more usage
+            Column("value2", Text),  # File content. Will be short most of the time, but we plan on more usage
             Column("meta", String(255))  # File mime-type
         )
 
         self.payloads = Table(
             f"{table_prefix}payloads", self.metadata,
             Column("evil_path_id", None, ForeignKey(f"{table_prefix}paths.path_id"), nullable=False),
-            Column("original_path_id", None, ForeignKey(f"{table_prefix}paths.path_id"), nullable=False),
             Column("module", String(255), nullable=False),
             Column("category", String(255), nullable=False),  # Vulnerability category, should not be that long
             Column("level", Integer, nullable=False),
-            Column("parameter", Text, nullable=False),  # Vulnerable parameter, can be huge
+            Column("parameter", Text),  # Vulnerable parameter, can be huge
             Column("info", Text, nullable=False),
             # Vulnerability description. If it contains the parameter name then huge.
             Column("type", String(255), nullable=False),  # Something like additional/anomaly/vulnerability
@@ -618,13 +617,12 @@ class SqlPersister:
     # pylint: disable=too-many-positional-arguments
     async def add_payload(
             self,
-            request_id: int,
             payload_type: str,
             module: str,
             category: Optional[str] = None,
             level: int = 0,
             request: Request = None,
-            parameter: str = "",
+            parameter: Optional[str] = None,
             info: str = "",
             wstg: Optional[List[str]] = None,
             response: Response = None
@@ -714,7 +712,6 @@ class SqlPersister:
         # request_id is the ID of the original (legit) request
         statement = self.payloads.insert().values(
             evil_path_id=path_id,
-            original_path_id=request_id,
             module=module,
             category=category,
             level=level,
@@ -821,15 +818,13 @@ class SqlPersister:
             result = await conn.execute(select(self.payloads))
 
         for row in result.fetchall():
-            evil_id, original_id, module, category, level, parameter, info, payload_type, wstg, response_id = row
+            evil_id, module, category, level, parameter, info, payload_type, wstg, response_id = row
 
             evil_request = await self.get_path_by_id(evil_id)
-            original_request = await self.get_path_by_id(original_id)
             response = await self.get_response_by_id(response_id)
 
             yield Payload(
                 evil_request,
-                original_request,
                 category,
                 level,
                 parameter,
@@ -861,10 +856,7 @@ class SqlPersister:
         async with self._engine.begin() as conn:
             await conn.execute(
                 self.payloads.delete().where(
-                    or_(
-                        self.payloads.c.evil_path_id == path_id,
-                        self.payloads.c.original_path_id == path_id
-                    )
+                    self.payloads.c.evil_path_id == path_id,
                 )
             )
             await conn.execute(self.attack_logs.delete().where(self.attack_logs.c.path_id == path_id))
