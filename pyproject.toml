@@ -70,7 +70,7 @@ wapiti-getcookie = "wapitiCore.main.getcookie:getcookie_asyncio_wrapper"
 test = [
         "humanize==4.12.3",
         "pytest==8.4.1",
-        "pytest-cov==6.2.1",
+        "pytest-cov==7.0.0",
         "pytest-asyncio==1.1.0",
         "respx==0.22.0",
 ]
@@ -79,7 +79,7 @@ dev = [
         "humanize==4.12.3",
         "pylint==3.3.8",
         "pytest==8.4.1",
-        "pytest-cov==6.2.1",
+        "pytest-cov==7.0.0",
         "pytest-asyncio==1.1.0",
         "respx==0.22.0",
         "wheel",
