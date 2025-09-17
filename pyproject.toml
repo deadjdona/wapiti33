@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wapiti3"
-version = "3.2.4"
+version = "3.2.5"
 description = "A web application vulnerability scanner"
 readme  = "README.rst"
 requires-python = ">=3.12,<3.14"
@@ -50,7 +50,7 @@ dependencies = [
         "msgpack==1.1.1",  # required by mitmproxy, lower version may require g++
         "packaging==25.0",
         "pyasn1==0.6.1",
-        "sqlalchemy==2.0.42",
+        "sqlalchemy==2.0.43",
         "tld==0.13.1",
         "typing-extensions>=4.12.0",  # prevent annotation assertion errors within sqlalchemy
         "urwid==3.0.2",  # required by mitmproxy, lower versions conflict with typing-extensions
@@ -70,7 +70,7 @@ wapiti-getcookie = "wapitiCore.main.getcookie:getcookie_asyncio_wrapper"
 test = [
         "humanize==4.12.3",
         "pytest==8.4.1",
-        "pytest-cov==6.2.1",
+        "pytest-cov==7.0.0",
         "pytest-asyncio==1.1.0",
         "respx==0.22.0",
 ]
@@ -79,7 +79,7 @@ dev = [
         "humanize==4.12.3",
         "pylint==3.3.8",
         "pytest==8.4.1",
-        "pytest-cov==6.2.1",
+        "pytest-cov==7.0.0",
         "pytest-asyncio==1.1.0",
         "respx==0.22.0",
         "wheel",
