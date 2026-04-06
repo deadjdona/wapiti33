@@ -111,13 +111,13 @@ jQuery.fn.formulaire_dyn_ajax = function(target) {
 	if (this.length)
 		initReaderBuffer();
   return this.each(function() {
-	var cible = (typeof target === 'string' && jQuery(target).length) ? target : this;
+	var cible = (typeof target === 'string' && jQuery(target).length) ? jQuery(target) : jQuery(this);
 		jQuery('form:not(.noajax)', this).each(function(){
 		var leform = this;
 		jQuery(this).prepend("<input type='hidden' name='var_ajax' value='form' />")
 		.ajaxForm({
 			beforeSubmit: function(){
-				jQuery(cible).addClass('loading').animeajax();
+				cible.addClass('loading').animeajax();
 			},
 			success: function(c){
 				if (c=='noajax'){
@@ -131,7 +131,7 @@ jQuery.fn.formulaire_dyn_ajax = function(target) {
 						jQuery('<div><\/div>').html(c));
 					if (d.length)
 						c = d.html();
-					jQuery(cible)
+					cible
 					.removeClass('loading')
 					.html(c)
 					.positionner()
